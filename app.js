@@ -7,8 +7,6 @@ var rootPath = __dirname + "/";
 // Read in config file(s)
 var config = require("config");
 
-const User = require('./src/User');
-
 var connect = require("connect");
 var cookieParser = require("cookie-parser");
 var bodyParser = require("body-parser");
@@ -21,6 +19,9 @@ var sendmailTransport = require("nodemailer-sendmail-transport");
 var transport = nodemailer.createTransport(sendmailTransport({}));
 var formidable = require("formidable");
 var markdown = require("markdown").markdown;
+
+const User = require("./src/User");
+const Util = require("./src/util");
 
 //I'm pretty sure there's a better way to do this:
 var fs = require("fs");
@@ -177,7 +178,6 @@ app.get("/e/:id", function(req, res) {
       model = extend(model, templates);
       model.renderedTemplate = escape(Mustache.render(embedTemplate, model));
       res.send(Mustache.render(embedJTemplate, model));
-
     })
     .catch(err => {
       awesomeLog(req, err);
@@ -196,7 +196,6 @@ app.get("/csv/:id", function(req, res) {
 
   User.find({ "library.lists.externalId": id })
     .then(users => {
-
       if (!users.length) {
         res.status(400).send("Invalid list specified.");
         return;
@@ -300,6 +299,7 @@ app.post("/register", function(req, res) {
           password: password,
           email: email,
           token: token,
+          externalIds: [],
           library: JSON.parse(req.body.library)
         };
         awesomeLog(req, "Saving new user.");
@@ -484,39 +484,27 @@ function account(req, res, user) {
 }
 
 function externalId(req, res, user) {
-  var filePath = rootPath + "extIds.txt";
+  let id;
 
-  fs.readFile(filePath, function(err, data) {
-    // read file to memory
-    if (!err) {
-      data = data.toString(); // stringify buffer
-      var position = data.indexOf("\n"); // find position of new line element
-      if (position != -1) {
-        // if new line element found
-        var myId = data.substr(0, position);
-        data = data.substr(position + 1); // subtract string based on first line length
-        fs.writeFile(filePath, data, function(err) {
-          // write file
-          if (err) {
-            // if error, report
-            awesomeLog(req, err);
-          }
-        });
-        res.send(myId);
-        awesomeLog(req, user.username + " - " + myId);
+  // keep this for legacy users who may exist but have no external ids
+  if (!user.externalIds) {
+    user.externalIds = [];
+  }
 
-        if (typeof user.externalIds == "undefined") user.externalIds = [myId];
-        else user.externalIds.push(myId);
-
-        User.save(user);
-      } else {
-        awesomeLog(req, "External ID File: no lines found!!!111oneoneone");
-      }
-    } else {
-      awesomeLog(req, "ERROR OPENING EXTERNAL ID FILE");
+  Util.generateExternalId()
+    .then(myId => {
+      id = myId;
+      user.externalIds.push(myId);
+      User.save(user);
+    })
+    .then(() => {
+      res.send(id);
+      awesomeLog(req, user.username + " - " + id);
+    })
+    .catch(err => {
       awesomeLog(req, err);
-    }
-  });
+      res.sendStatus(500);
+    });
 }
 
 app.post("/imageUpload", function(req, res) {
