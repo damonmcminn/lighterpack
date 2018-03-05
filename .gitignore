@@ -3,3 +3,9 @@ extIds.txt
 node_modules
 .DS_Store
 /config/local.json
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
