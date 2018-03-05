@@ -311,36 +311,6 @@ app.post("/register", function(req, res) {
   });
 });
 
-/*app.get("/fixdb", function(req, res) {
-    db.users.find({}, function(err, users) {
-        if (!users.length) {
-            res.send(500, "fff");
-            return;
-        }
-        for (var i in users) {
-            var user = users[i];
-            user.library = JSON.parse(user.library);
-            db.users.save(user);
-        }
-        res.send("done");
-    });
-});*/
-/*
-app.get("/fixdb", function(req, res) {
-    db.users.find({username: "galen"}, function(err, users) {
-        if (!users.length) {
-            res.send(500, "fff");
-            return;
-        }
-        for (var i in users) {
-            var user = users[i];
-            user.password = "";
-            db.users.save(user);
-        }
-        res.send("done");
-    });
-});*/
-
 app.post("/signin", function(req, res) {
   authenticateUser(req, res, returnLibrary);
 });
