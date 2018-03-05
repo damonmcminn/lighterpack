@@ -7,10 +7,8 @@ var rootPath = __dirname + "/";
 // Read in config file(s)
 var config = require("config");
 
-var collections = ["users", "libraries"];
+const User = require('./src/User');
 
-var mongojs = require("mongojs");
-var db = mongojs(config.get("databaseUrl"), collections);
 var connect = require("connect");
 var cookieParser = require("cookie-parser");
 var bodyParser = require("body-parser");
@@ -60,59 +58,61 @@ app.get("/r/:id", function(req, res) {
     res.status(400).send("No list specified!");
     return;
   }
-  db.users.find({ "library.lists.externalId": id }, function(err, users) {
-    if (err) {
-      res.status(500).send("An error occurred.");
-      return;
-    }
-    if (!users.length) {
-      res.status(400).send("Invalid list specified.");
-      return;
-    }
-    var library = new Library();
-    var list;
 
-    if (!users[0] || typeof users[0].library == "undefined") {
-      awesomeLog(req, "Undefined users[0].");
-      res.status(500).send("Unknown error.");
-    }
-
-    library.load(users[0].library);
-    for (var i in library.lists) {
-      if (library.lists[i].externalId && library.lists[i].externalId == id) {
-        library.defaultListId = library.lists[i].id;
-        list = library.lists[i];
-        break;
+  User.find({ "library.lists.externalId": id })
+    .then(users => {
+      if (!users.length) {
+        res.status(400).send("Invalid list specified.");
+        return;
       }
-    }
+      var library = new Library();
+      var list;
 
-    var chartData = escape(JSON.stringify(list.renderChart("total", false)));
-    var renderedCategories = library.render({
-      itemTemplate: templates.t_itemShare,
-      categoryTemplate: templates.t_categoryShare,
-      optionalFields: library.optionalFields,
-      unitSelectTemplate: templates.t_unitSelect,
-      currencySymbol: library.currencySymbol
+      if (!users[0] || typeof users[0].library == "undefined") {
+        awesomeLog(req, "Undefined users[0].");
+        res.status(500).send("Unknown error.");
+      }
+
+      library.load(users[0].library);
+      for (var i in library.lists) {
+        if (library.lists[i].externalId && library.lists[i].externalId == id) {
+          library.defaultListId = library.lists[i].id;
+          list = library.lists[i];
+          break;
+        }
+      }
+
+      var chartData = escape(JSON.stringify(list.renderChart("total", false)));
+      var renderedCategories = library.render({
+        itemTemplate: templates.t_itemShare,
+        categoryTemplate: templates.t_categoryShare,
+        optionalFields: library.optionalFields,
+        unitSelectTemplate: templates.t_unitSelect,
+        currencySymbol: library.currencySymbol
+      });
+
+      var renderedTotals = library.renderTotals(
+        templates.t_totals,
+        templates.t_unitSelect,
+        library.totalUnit
+      );
+
+      var model = {
+        listName: list.name,
+        chartData: chartData,
+        renderedCategories: renderedCategories,
+        renderedTotals: renderedTotals,
+        optionalFields: library.optionalFields,
+        renderedDescription: markdown.toHTML(list.description)
+      };
+
+      model = extend(model, templates);
+      res.send(Mustache.render(shareTemplate, model));
+    })
+    .catch(err => {
+      awesomeLog(req, err);
+      res.status(500).send("An error occurred.");
     });
-
-    var renderedTotals = library.renderTotals(
-      templates.t_totals,
-      templates.t_unitSelect,
-      library.totalUnit
-    );
-
-    var model = {
-      listName: list.name,
-      chartData: chartData,
-      renderedCategories: renderedCategories,
-      renderedTotals: renderedTotals,
-      optionalFields: library.optionalFields,
-      renderedDescription: markdown.toHTML(list.description)
-    };
-
-    model = extend(model, templates);
-    res.send(Mustache.render(shareTemplate, model));
-  });
 });
 
 app.get("/e/:id", function(req, res) {
@@ -124,64 +124,65 @@ app.get("/e/:id", function(req, res) {
     return;
   }
 
-  db.users.find({ "library.lists.externalId": id }, function(err, users) {
-    if (err) {
-      res.status(500).send("An error occurred.");
-      return;
-    }
-
-    if (!users.length) {
-      res.status(400).send("Invalid list specified.");
-      return;
-    }
-
-    var library = new Library();
-    var list;
-
-    if (!users[0] || typeof users[0].library == "undefined") {
-      awesomeLog(req, "Undefined users[0].");
-      res.status(500).send("Unknown error.");
-    }
-
-    library.load(users[0].library);
-    for (var i in library.lists) {
-      if (library.lists[i].externalId && library.lists[i].externalId == id) {
-        library.defaultListId = library.lists[i].id;
-        list = library.lists[i];
-        break;
+  User.find({ "library.lists.externalId": id })
+    .then(users => {
+      if (!users.length) {
+        res.status(400).send("Invalid list specified.");
+        return;
       }
-    }
 
-    var chartData = escape(JSON.stringify(list.renderChart("total", false)));
+      var library = new Library();
+      var list;
 
-    var renderedCategories = library.render({
-      itemTemplate: templates.t_itemShare,
-      categoryTemplate: templates.t_categoryShare,
-      optionalFields: library.optionalFields,
-      unitSelectTemplate: templates.t_unitSelect,
-      renderedDescription: markdown.toHTML(list.description),
-      currencySymbol: library.currencySymbol
+      if (!users[0] || typeof users[0].library == "undefined") {
+        awesomeLog(req, "Undefined users[0].");
+        res.status(500).send("Unknown error.");
+      }
+
+      library.load(users[0].library);
+      for (var i in library.lists) {
+        if (library.lists[i].externalId && library.lists[i].externalId == id) {
+          library.defaultListId = library.lists[i].id;
+          list = library.lists[i];
+          break;
+        }
+      }
+
+      var chartData = escape(JSON.stringify(list.renderChart("total", false)));
+
+      var renderedCategories = library.render({
+        itemTemplate: templates.t_itemShare,
+        categoryTemplate: templates.t_categoryShare,
+        optionalFields: library.optionalFields,
+        unitSelectTemplate: templates.t_unitSelect,
+        renderedDescription: markdown.toHTML(list.description),
+        currencySymbol: library.currencySymbol
+      });
+
+      var renderedTotals = library.renderTotals(
+        templates.t_totals,
+        templates.t_unitSelect
+      );
+
+      var model = {
+        externalId: id,
+        listName: list.name,
+        chartData: chartData,
+        renderedCategories: renderedCategories,
+        renderedTotals: renderedTotals,
+        optionalFields: library.optionalFields,
+        renderedDescription: markdown.toHTML(list.description),
+        baseUrl: config.get("deployUrl")
+      };
+      model = extend(model, templates);
+      model.renderedTemplate = escape(Mustache.render(embedTemplate, model));
+      res.send(Mustache.render(embedJTemplate, model));
+
+    })
+    .catch(err => {
+      awesomeLog(req, err);
+      res.status(500).send("An error occurred.");
     });
-
-    var renderedTotals = library.renderTotals(
-      templates.t_totals,
-      templates.t_unitSelect
-    );
-
-    var model = {
-      externalId: id,
-      listName: list.name,
-      chartData: chartData,
-      renderedCategories: renderedCategories,
-      renderedTotals: renderedTotals,
-      optionalFields: library.optionalFields,
-      renderedDescription: markdown.toHTML(list.description),
-      baseUrl: config.get("deployUrl")
-    };
-    model = extend(model, templates);
-    model.renderedTemplate = escape(Mustache.render(embedTemplate, model));
-    res.send(Mustache.render(embedJTemplate, model));
-  });
 });
 
 app.get("/csv/:id", function(req, res) {
@@ -193,74 +194,75 @@ app.get("/csv/:id", function(req, res) {
     return;
   }
 
-  db.users.find({ "library.lists.externalId": id }, function(err, users) {
-    if (err) {
-      res.status(500).send("An error occurred.");
-      return;
-    }
+  User.find({ "library.lists.externalId": id })
+    .then(users => {
 
-    if (!users.length) {
-      res.status(400).send("Invalid list specified.");
-      return;
-    }
-
-    var library = new Library();
-    var list;
-
-    if (!users[0] || typeof users[0].library == "undefined") {
-      awesomeLog(req, "Undefined users[0].");
-      res.status(500).send("Unknown error.");
-    }
-
-    library.load(users[0].library);
-    for (var i in library.lists) {
-      if (library.lists[i].externalId && library.lists[i].externalId == id) {
-        library.defaultListId = library.lists[i].id;
-        list = library.lists[i];
-        break;
+      if (!users.length) {
+        res.status(400).send("Invalid list specified.");
+        return;
       }
-    }
 
-    var fullUnits = { oz: "ounce", lb: "pound", g: "gram", kg: "kilogram" };
-    var out = "Item Name,Category,desc,qty,weight,unit\n";
+      var library = new Library();
+      var list;
 
-    for (var i in list.categoryIds) {
-      var category = library.getCategoryById(list.categoryIds[i]);
-      for (var j in category.itemIds) {
-        var categoryItem = category.itemIds[j];
-        var item = library.getItemById(categoryItem.itemId);
-        var temp = [
-          item.name,
-          category.name,
-          item.description,
-          categoryItem.qty,
-          "" + MgToWeight(item.weight, item.authorUnit),
-          fullUnits[item.authorUnit]
-        ];
-        for (var k in temp) {
-          var field = temp[k];
-          if (k > 0) out += ",";
-          if (typeof field == "string") {
-            if (field.indexOf(",") > -1)
-              out += '"' + field.replace(/\"/g, '""') + '"';
-            else out += field;
-          } else out += field;
+      if (!users[0] || typeof users[0].library == "undefined") {
+        awesomeLog(req, "Undefined users[0].");
+        res.status(500).send("Unknown error.");
+      }
+
+      library.load(users[0].library);
+      for (var i in library.lists) {
+        if (library.lists[i].externalId && library.lists[i].externalId == id) {
+          library.defaultListId = library.lists[i].id;
+          list = library.lists[i];
+          break;
         }
-        out += "\n";
       }
-    }
 
-    var filename = list.name;
-    if (!filename) filename = id;
-    filename = filename.replace(/[^a-z0-9\-]/gi, "_");
+      var fullUnits = { oz: "ounce", lb: "pound", g: "gram", kg: "kilogram" };
+      var out = "Item Name,Category,desc,qty,weight,unit\n";
 
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader(
-      "Content-Disposition",
-      "attachment;filename=" + filename + ".csv"
-    );
-    res.send(out);
-  });
+      for (var i in list.categoryIds) {
+        var category = library.getCategoryById(list.categoryIds[i]);
+        for (var j in category.itemIds) {
+          var categoryItem = category.itemIds[j];
+          var item = library.getItemById(categoryItem.itemId);
+          var temp = [
+            item.name,
+            category.name,
+            item.description,
+            categoryItem.qty,
+            "" + MgToWeight(item.weight, item.authorUnit),
+            fullUnits[item.authorUnit]
+          ];
+          for (var k in temp) {
+            var field = temp[k];
+            if (k > 0) out += ",";
+            if (typeof field == "string") {
+              if (field.indexOf(",") > -1)
+                out += '"' + field.replace(/\"/g, '""') + '"';
+              else out += field;
+            } else out += field;
+          }
+          out += "\n";
+        }
+      }
+
+      var filename = list.name;
+      if (!filename) filename = id;
+      filename = filename.replace(/[^a-z0-9\-]/gi, "_");
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader(
+        "Content-Disposition",
+        "attachment;filename=" + filename + ".csv"
+      );
+      res.send(out);
+    })
+    .catch(err => {
+      awesomeLog(req, err);
+      res.status(500).send("An error occurred.");
+    });
 });
 
 app.post("/register", function(req, res) {
@@ -284,31 +286,38 @@ app.post("/register", function(req, res) {
   }
   awesomeLog(req, username);
 
-  db.users.find({ username: username }, function(err, users) {
-    if (err || users.length) {
-      awesomeLog(req, "User Exists.");
-      res.status(400).send("User Exists.");
-      return;
-    }
-    require("crypto").randomBytes(48, function(ex, buf) {
-      var token = buf.toString("hex");
-      var newUser = {
-        username: username,
-        password: password,
-        email: email,
-        token: token,
-        library: JSON.parse(req.body.library)
-      };
-      awesomeLog(req, "Saving new user.");
-      db.users.save(newUser);
-      var out = {
-        username: username,
-        library: JSON.stringify(newUser.library)
-      };
-      res.cookie("lp", token, { path: "/", maxAge: 365 * 24 * 60 * 1000 });
-      res.send(out);
+  User.find({ username })
+    .then(users => {
+      if (err || users.length) {
+        awesomeLog(req, "User Exists.");
+        res.status(400).send("User Exists.");
+        return;
+      }
+      require("crypto").randomBytes(48, function(ex, buf) {
+        var token = buf.toString("hex");
+        var newUser = {
+          username: username,
+          password: password,
+          email: email,
+          token: token,
+          library: JSON.parse(req.body.library)
+        };
+        awesomeLog(req, "Saving new user.");
+
+        User.save(newUser);
+
+        var out = {
+          username: username,
+          library: JSON.stringify(newUser.library)
+        };
+        res.cookie("lp", token, { path: "/", maxAge: 365 * 24 * 60 * 1000 });
+        res.send(out);
+      });
+    })
+    .catch(err => {
+      awesomeLog(req, err);
+      res.sendStatus(500);
     });
-  });
 });
 
 app.post("/signin", function(req, res) {
@@ -327,7 +336,7 @@ app.post("/saveLibrary", function(req, res) {
 function saveLibrary(req, res, user) {
   try {
     user.library = JSON.parse(req.body.data);
-    db.users.save(user);
+    User.save(user);
     res.send("success");
     awesomeLog(req, user.username);
   } catch (e) {
@@ -348,56 +357,57 @@ app.post("/forgotPassword", function(req, res) {
     return;
   }
 
-  db.users.find({ username: username }, function(err, users) {
-    if (err) {
+  User.find({ username })
+    .then(users => {
+      if (!users.length) {
+        res.status(400).send("error.");
+        awesomeLog(req, "Forgot password for unknown user:" + username);
+        return;
+      }
+      var user = users[0];
+      require("crypto").randomBytes(12, function(ex, buf) {
+        var newPassword = buf.toString("hex");
+
+        var hash = CryptoJS.SHA3(newPassword + username);
+        hash = hash.toString(CryptoJS.enc.Base64);
+
+        user.password = hash;
+        var email = user.email;
+
+        var message =
+          "Hello " +
+          username +
+          ",\n Apparently you forgot your password. Here's your new one: \n\n Username: " +
+          username +
+          "\n Password: " +
+          newPassword +
+          "\n\n If you continue to have problems, please reply to this email with details.\n\n Thanks!";
+
+        var mailOptions = {
+          from: "LighterPack <info@lighterpack.com>",
+          to: email,
+          subject: "Your new LighterPack password",
+          text: message
+        };
+
+        awesomeLog(req, "Attempting to send new password to:" + email);
+        transport.sendMail(mailOptions, function(error, response) {
+          if (error) {
+            awesomeLog(req, error);
+          } else {
+            User.save(user);
+            var out = { username: username };
+            res.send(out);
+            awesomeLog(req, "Message sent: " + response.message);
+            awesomeLog(req, "password changed for user:" + username);
+          }
+        });
+      });
+    })
+    .catch(err => {
       res.status(500).send(":(");
       awesomeLog(req, "Forgot password lookup error for:" + username);
-      return;
-    } else if (!users.length) {
-      res.status(400).send("error.");
-      awesomeLog(req, "Forgot password for unknown user:" + username);
-      return;
-    }
-    var user = users[0];
-    require("crypto").randomBytes(12, function(ex, buf) {
-      var newPassword = buf.toString("hex");
-
-      var hash = CryptoJS.SHA3(newPassword + username);
-      hash = hash.toString(CryptoJS.enc.Base64);
-
-      user.password = hash;
-      var email = user.email;
-
-      var message =
-        "Hello " +
-        username +
-        ",\n Apparently you forgot your password. Here's your new one: \n\n Username: " +
-        username +
-        "\n Password: " +
-        newPassword +
-        "\n\n If you continue to have problems, please reply to this email with details.\n\n Thanks!";
-
-      var mailOptions = {
-        from: "LighterPack <info@lighterpack.com>",
-        to: email,
-        subject: "Your new LighterPack password",
-        text: message
-      };
-
-      awesomeLog(req, "Attempting to send new password to:" + email);
-      transport.sendMail(mailOptions, function(error, response) {
-        if (error) {
-          awesomeLog(req, error);
-        } else {
-          db.users.save(user);
-          var out = { username: username };
-          res.send(out);
-          awesomeLog(req, "Message sent: " + response.message);
-          awesomeLog(req, "password changed for user:" + username);
-        }
-      });
     });
-  });
 });
 
 app.post("/forgotUsername", function(req, res) {
@@ -409,45 +419,46 @@ app.post("/forgotUsername", function(req, res) {
     return;
   }
 
-  db.users.find({ email: email }, function(err, users) {
-    if (err) {
+  User.find({ email })
+    .then(users => {
+      if (!users.length) {
+        res.status(400).send("error.");
+        awesomeLog(req, "Forgot email for unknown user:" + email);
+        return;
+      }
+      var user = users[0];
+      var username = user.username;
+
+      var message =
+        "Hello " +
+        username +
+        ",\n Apparently you forgot your username. Here It is: \n\n Username: " +
+        username +
+        "\n\n If you continue to have problems, please reply to this email with details.\n\n Thanks!";
+
+      var mailOptions = {
+        from: "LighterPack <info@lighterpack.com>",
+        to: email,
+        subject: "Your LighterPack username",
+        text: message
+      };
+
+      awesomeLog(req, "Attempting to send username to:" + email);
+      transport.sendMail(mailOptions, function(error, response) {
+        if (error) {
+          awesomeLog(req, error);
+        } else {
+          var out = { email: email };
+          res.send(out);
+          awesomeLog(req, "Message sent: " + response.message);
+          awesomeLog(req, "sent username message for user:" + username);
+        }
+      });
+    })
+    .catch(err => {
       res.status(500).send(":(");
       awesomeLog(req, "Forgot email lookup error for:" + email);
-      return;
-    } else if (!users.length) {
-      res.status(400).send("error.");
-      awesomeLog(req, "Forgot email for unknown user:" + email);
-      return;
-    }
-    var user = users[0];
-    var username = user.username;
-
-    var message =
-      "Hello " +
-      username +
-      ",\n Apparently you forgot your username. Here It is: \n\n Username: " +
-      username +
-      "\n\n If you continue to have problems, please reply to this email with details.\n\n Thanks!";
-
-    var mailOptions = {
-      from: "LighterPack <info@lighterpack.com>",
-      to: email,
-      subject: "Your LighterPack username",
-      text: message
-    };
-
-    awesomeLog(req, "Attempting to send username to:" + email);
-    transport.sendMail(mailOptions, function(error, response) {
-      if (error) {
-        awesomeLog(req, error);
-      } else {
-        var out = { email: email };
-        res.send(out);
-        awesomeLog(req, "Message sent: " + response.message);
-        awesomeLog(req, "sent username message for user:" + username);
-      }
     });
-  });
 });
 
 app.post("/account", function(req, res) {
@@ -466,7 +477,7 @@ function account(req, res, user) {
     awesomeLog(req, "Changing Email - " + user.username);
   }
 
-  db.users.save(user);
+  User.save(user);
 
   res.send("success");
   return;
@@ -497,7 +508,7 @@ function externalId(req, res, user) {
         if (typeof user.externalIds == "undefined") user.externalIds = [myId];
         else user.externalIds.push(myId);
 
-        db.users.save(user);
+        User.save(user);
       } else {
         awesomeLog(req, "External ID File: no lines found!!!111oneoneone");
       }
@@ -560,20 +571,9 @@ function authenticateUser(req, res, callback) {
     return;
   }
   if (req.body.username) {
-    db.users.find(
-      { username: req.body.username, password: req.body.password },
-      function(err, users) {
-        if (err) {
-          res.status(500).send(":(");
-          awesomeLog(
-            req,
-            "Error on authenticateUser for:" +
-              req.body.username +
-              ", " +
-              req.body.password
-          );
-          return;
-        } else if (!users || !users.length) {
+    User.find({ username: req.body.username, password: req.body.password })
+      .then(users => {
+        if (!users || !users.length) {
           res.status(400).send("Invalid username and/or password.");
           awesomeLog(req, "Bad password for: " + req.body.username);
           return;
@@ -582,15 +582,32 @@ function authenticateUser(req, res, callback) {
         require("crypto").randomBytes(48, function(ex, buf) {
           var token = buf.toString("hex");
           user.token = token;
-          db.users.save(user);
+          User.save(user);
           res.cookie("lp", token, { path: "/", maxAge: 365 * 24 * 60 * 1000 });
           callback(req, res, user);
         });
-      }
-    );
+      })
+      .catch(err => {
+        res.status(500).send(":(");
+        awesomeLog(
+          req,
+          "Error on authenticateUser for:" +
+            req.body.username +
+            ", " +
+            req.body.password
+        );
+      });
   } else {
-    db.users.find({ token: req.cookies.lp }, function(err, users) {
-      if (err) {
+    User.find({ token: req.cookies.lp })
+      .then(users => {
+        if (!users || !users.length) {
+          awesomeLog(req, "bad cookie!");
+          res.status(400).send("Please log in again.");
+          return;
+        }
+        callback(req, res, users[0]);
+      })
+      .catch(err => {
         res.status(500).send(":(");
         awesomeLog(
           req,
@@ -599,14 +616,7 @@ function authenticateUser(req, res, callback) {
             ", " +
             req.body.password
         );
-        return;
-      } else if (!users || !users.length) {
-        awesomeLog(req, "bad cookie!");
-        res.status(400).send("Please log in again.");
-        return;
-      }
-      callback(req, res, users[0]);
-    });
+      });
   }
 }
 
